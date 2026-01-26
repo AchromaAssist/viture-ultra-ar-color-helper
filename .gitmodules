@@ -1,0 +1,3 @@
+[submodule "external/XRLinuxDriver"]
+	path = external/XRLinuxDriver
+	url = https://github.com/wheaney/XRLinuxDriver.git
