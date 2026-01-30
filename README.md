@@ -1,62 +1,48 @@
-# Viture AR Glasses CLI Demo
+# Viture Ultra AR Glasses Color Helper App (Proof of Concept)
 
-A simple CLI application for interacting with Viture AR glasses using the XRLinuxDriver SDK.
+A CLI application for Viture AR glasses that demonstrates real-time color detection, stereo depth estimation, and 3D overlay rendering.
+
+![Demo](output.gif)
+
+**Demo:** The app detects dominant colors in real time — in this example, distinguishing green (unripe) from yellow (mature) bananas, which can be difficult for color blind people. After a head nod gesture, it captures a frame, identifies the color, and displays the result as a 3D label on the glasses. The video above shows both the RGB camera feed and the overlay image rendered on the glasses display.
 
 ## Features
 
-- Detects and displays connected Viture devices with detailed information
-- Handles device connection/disconnection events
-- Streams IMU data (roll, pitch, yaw) with 1-second updates
-- Supports all Viture models: One, One Lite, Pro, Luma, Luma Pro, Luma Ultra, Luma Cyber, Beast
+- **Color detection** — dominant color recognition with configurable threshold
+- **Stereo depth estimation** — real-time depth from dual cameras with periodic updates
+- **IMU tracking** — roll, pitch, yaw from device IMU (Carina device used)
+- **Nod detection** — head nod gesture triggers capture (two-phase: down + return)
+- **Stereo 3D disparity** — labels rendered at depth-corrected position with manual +/- adjustment
+- **Precomputed rectification maps** — stereo rectification maps stored locally for fast startup
+- **DRM direct rendering** — side-by-side stereo output to glasses display at 1920x1200
+- **MJPEG streaming** — live camera feed with overlay via HTTP for monitoring
+- **SLAM correction** — quaternion-based head tracking stabilizes label position
+
+## Supported Devices
+
+| Model | Product IDs |
+|-------|-------------|
+| [Luma Ultra](https://www.viture.com/product/viture-luma-ultra-xr-glasses) | 0x1101, 0x1104 |
+
+Luma Ultra is the only Viture model with a built-in RGB camera and stereo IR cameras.
 
 ## Requirements
 
 - Linux (aarch64 or x86_64)
 - CMake 3.16+
-- libusb-1.0 development files
 - GCC with C17 support
+- libusb-1.0 development files
+- libdrm development files
+- libjpeg development files
 
 ## Building
 
-### 1. Set up remote repository (on target device)
-
 ```bash
-# SSH into target device
-ssh mini
-
-# Create bare repository for pushing
-mkdir -p ~/repos/viture_ar_demo.git
-cd ~/repos/viture_ar_demo.git
-git init --bare
-```
-
-### 2. Configure local repository and push
-
-```bash
-# Add remote
-git remote add mini mini:~/repos/viture_ar_demo.git
-
-# Create initial commit and push
-git add -A
-git commit -m "Initial commit: Viture AR CLI demo"
-git push -u mini main
-```
-
-### 3. Clone and build on target device
-
-```bash
-# SSH into target device
-ssh mini
-
-# Clone the repository
-git clone ~/repos/viture_ar_demo.git ~/viture_ar_demo
-cd ~/viture_ar_demo
+# Install dependencies (Debian/Ubuntu)
+sudo apt-get install -y cmake libusb-1.0-0-dev libdrm-dev libjpeg-dev
 
 # Initialize submodules
 git submodule update --init --recursive
-
-# Install dependencies (Debian/Ubuntu)
-sudo apt-get install -y cmake libusb-1.0-0-dev
 
 # Build
 mkdir build && cd build
@@ -64,106 +50,67 @@ cmake ..
 make -j$(nproc)
 ```
 
-### 4. Push updates
-
-After making changes locally:
-```bash
-git add -A
-git commit -m "Your commit message"
-git push mini main
-```
-
-Then on the target device:
-```bash
-cd ~/viture_ar_demo
-git pull
-cd build
-make -j$(nproc)
-```
-
 ## Running
 
 ```bash
-# Make sure you have permissions to access USB devices
-# Either run as root or set up udev rules
+# Using the run script (recommended)
+./run.sh
 
-# Run the demo
-./viture_ar_demo
+# Or manually
+cd build
+LD_LIBRARY_PATH="../external/XRLinuxDriver/lib/aarch64/viture:$LD_LIBRARY_PATH" ./viture_ar_demo
 ```
 
-### USB Permissions (without root)
+DRM direct rendering requires master access. The app tries multiple approaches:
+1. Set `non-desktop` property on the Viture connector
+2. Request a DRM lease
+3. Acquire DRM master (requires no active display manager on the VT)
 
-Create a udev rule for Viture devices:
+### USB Permissions (without root)
 
 ```bash
 sudo tee /etc/udev/rules.d/99-viture.rules << 'EOF'
 # Viture AR Glasses
 SUBSYSTEM=="usb", ATTR{idVendor}=="35ca", MODE="0666"
 EOF
-
-# Reload udev rules
 sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
 
-## Output Example
+### Command-line Options
 
-```
-===========================================
-  Viture AR Glasses CLI Demo
-===========================================
+Key parameters:
 
-Scanning for Viture devices...
+| Option | Description |
+|--------|-------------|
+| `--crop SIZE` | Crop region size from camera center |
+| `--display WxH` | Display/scene buffer dimensions |
+| `--offset X,Y` | Pixel offset from display center |
+| `--opacity PCT` | Image opacity 0-100% |
+| `--dominance PCT` | Color detection threshold |
+| `--roi-y OFFSET` | Vertical offset for crop ROI |
+| `--stereo-3d` | Enable stereo 3D rendering |
+| `--rectify` | Enable stereo rectification |
+| `--stream-port PORT` | MJPEG stream port (default: 8080) |
 
-Found 1 Viture device(s):
+### Keyboard Controls
 
-  Device #1:
-    Model:        VITURE Luma Ultra
-    Vendor ID:    0x35ca
-    Product ID:   0x1101
-    Bus:          1
-    Address:      5
-    Manufacturer: VITURE
-    Product:      VITURE Luma Ultra
-    SDK Name:     Luma Ultra
-    SDK Support:  Yes
-
--------------------------------------------
-Connecting to first available device...
-Device type: Carina (Luma Ultra/Cyber)
-Firmware version: 1.2.3
-Brightness level: 5
-Connected successfully!
-
--------------------------------------------
-Streaming IMU data (Ctrl+C to exit):
--------------------------------------------
-
-  Roll:   +1.23   Pitch:  -0.45   Yaw:  +12.34
-```
-
-## Supported Devices
-
-| Model | Product IDs |
-|-------|-------------|
-| One | 0x1011, 0x1013, 0x1017 |
-| One Lite | 0x1015, 0x101b |
-| Pro | 0x1019, 0x101d |
-| Luma | 0x1131 |
-| Luma Pro | 0x1121, 0x1141 |
-| Luma Ultra | 0x1101, 0x1104 |
-| Luma Cyber | 0x1151 |
-| Beast | 0x1201 |
+| Key | Action |
+|-----|--------|
+| `Space` | Force capture |
+| `+`/`-` | Adjust stereo disparity |
+| `d` | Debug depth detection |
+| `q` | Quit |
 
 ## Architecture
 
-The application uses:
-- **libusb** for USB device enumeration and detection
-- **VITURE SDK** (via XRLinuxDriver) for device control and IMU data streaming
-
-For Carina devices (Luma Ultra/Cyber), the SDK provides 6DOF tracking with position data.
-For older devices (Gen1/Gen2), the SDK provides 3DOF orientation tracking.
+- **libusb** — USB device enumeration and detection
+- **VITURE SDK** (XRLinuxDriver) — device control, IMU streaming, stereo cameras
+- **libdrm** — direct rendering to glasses display
+- **libjpeg** — MJPEG stream encoding
 
 ## License
 
-This project uses the XRLinuxDriver which is licensed under GPL-3.0.
+This project is licensed under GPL-3.0.
+
+XRLinuxDriver submodule is also licensed under GPL-3.0.

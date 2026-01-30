@@ -25,5 +25,8 @@ cmake_install.cmake
 Makefile
 compile_commands.json
 
+# Captures
+captures/
+
 # macOS
 .DS_Store

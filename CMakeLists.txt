@@ -38,6 +38,7 @@ endif()
 # Find required packages
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
+pkg_check_modules(LIBDRM REQUIRED libdrm)
 
 # Find VITURE libraries
 file(GLOB VITURE_LIBS "${VITURE_LIB_DIR}/*.so")
@@ -46,26 +47,37 @@ message(STATUS "Found VITURE libraries: ${VITURE_LIBS}")
 # Define the executable
 add_executable(${PROJECT_NAME}
     src/main.c
+    src/drm_render.c
+    src/v4l2_capture.c
+    src/color_detect.c
+    src/stereo_depth.c
+    src/mjpeg_stream.c
 )
 
 # Include directories
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${XRDRIVER_INCLUDE}
     ${LIBUSB_INCLUDE_DIRS}
+    ${LIBDRM_INCLUDE_DIRS}
+    ${CMAKE_SOURCE_DIR}/src
 )
 
 # Link libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
     ${VITURE_LIBS}
     ${LIBUSB_LIBRARIES}
+    ${LIBDRM_LIBRARIES}
+    jpeg
     pthread
     m
 )
 
 # Set RPATH for finding shared libraries at runtime
+# Use $ORIGIN to make the path relative to the executable
 set_target_properties(${PROJECT_NAME} PROPERTIES
     BUILD_RPATH "${VITURE_LIB_DIR}"
-    INSTALL_RPATH "${VITURE_LIB_DIR}"
+    INSTALL_RPATH "$ORIGIN/../external/XRLinuxDriver/lib/${ARCH}/viture"
+    BUILD_RPATH_USE_ORIGIN ON
 )
 
 # Compiler flags
@@ -80,8 +92,94 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     VITURE_SUPPORTED
 )
 
+# Stereo camera test executable
+add_executable(stereo_test
+    src/stereo_test.c
+)
+
+target_include_directories(stereo_test PRIVATE
+    ${XRDRIVER_INCLUDE}
+    ${LIBUSB_INCLUDE_DIRS}
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(stereo_test PRIVATE
+    ${VITURE_LIBS}
+    ${LIBUSB_LIBRARIES}
+    pthread
+)
+
+set_target_properties(stereo_test PROPERTIES
+    BUILD_RPATH "${VITURE_LIB_DIR}"
+    BUILD_RPATH_USE_ORIGIN ON
+)
+
+target_compile_options(stereo_test PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+)
+
+# Depth estimation test executable
+add_executable(depth_test
+    src/depth_test.c
+    src/stereo_depth.c
+)
+
+target_include_directories(depth_test PRIVATE
+    ${XRDRIVER_INCLUDE}
+    ${LIBUSB_INCLUDE_DIRS}
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(depth_test PRIVATE
+    ${VITURE_LIBS}
+    ${LIBUSB_LIBRARIES}
+    pthread
+    m
+)
+
+set_target_properties(depth_test PROPERTIES
+    BUILD_RPATH "${VITURE_LIB_DIR}"
+    BUILD_RPATH_USE_ORIGIN ON
+)
+
+target_compile_options(depth_test PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+)
+
+# Calibration capture tool
+add_executable(calib_capture
+    src/calib_capture.c
+)
+
+target_include_directories(calib_capture PRIVATE
+    ${XRDRIVER_INCLUDE}
+    ${LIBUSB_INCLUDE_DIRS}
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(calib_capture PRIVATE
+    ${VITURE_LIBS}
+    ${LIBUSB_LIBRARIES}
+    pthread
+)
+
+set_target_properties(calib_capture PROPERTIES
+    BUILD_RPATH "${VITURE_LIB_DIR}"
+    BUILD_RPATH_USE_ORIGIN ON
+)
+
+target_compile_options(calib_capture PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+)
+
 # Installation
-install(TARGETS ${PROJECT_NAME}
+install(TARGETS ${PROJECT_NAME} stereo_test
     RUNTIME DESTINATION bin
 )
 
@@ -91,4 +189,5 @@ message(STATUS "Configuration Summary:")
 message(STATUS "  Architecture:     ${ARCH}")
 message(STATUS "  VITURE lib dir:   ${VITURE_LIB_DIR}")
 message(STATUS "  libusb includes:  ${LIBUSB_INCLUDE_DIRS}")
+message(STATUS "  libdrm includes:  ${LIBDRM_INCLUDE_DIRS}")
 message(STATUS "")
