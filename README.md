@@ -53,7 +53,10 @@ make -j$(nproc)
 ## Running
 
 ```bash
-# Using the run script (recommended)
+# Recommended (DRM direct rendering with tuned parameters)
+sudo bash ./run-drm.sh -- --crop 200 --display 300x300 --offset 0,-350 --opacity 25 --dominance 50
+
+# Or using the basic run script
 ./run.sh
 
 # Or manually
